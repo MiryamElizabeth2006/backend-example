@@ -1,50 +1,77 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { Product } from './entities/product.entity';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProductsService {
-  constructor(
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // CREAR
-  create(dto: CreateProductDto) {
-    const product = this.productRepository.create(dto);
-    this.productRepository.save(product);
-    return 'Producto Creado'
+  async create(dto: CreateProductDto) {
+    await this.prisma.product.create({
+      data: {
+        name: dto.name,
+        price: new Prisma.Decimal(dto.price),
+        description: dto.description,
+      },
+    });
+    return 'Producto Creado';
   }
 
   // VER TODOS
   findAll() {
-    return this.productRepository.find();
+    return this.prisma.product.findMany();
   }
 
   // VER UNO
   async findOne(id: number) {
-    const product = await this.productRepository.findOneBy({ id });
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+    });
+
     if (!product) {
       throw new NotFoundException('Producto no encontrado');
     }
+
     return product;
   }
 
   // ACTUALIZAR
   async updateProduct(id: number, dto: UpdateProductDto) {
-    const product = await this.findOne(id);
-    Object.assign(product, dto);
-    await this.productRepository.save(product);
+    // Verificar que el producto existe
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    const updateData: any = {};
+    if (dto.name) updateData.name = dto.name;
+    if (dto.price !== undefined) updateData.price = new Prisma.Decimal(dto.price);
+    if (dto.description) updateData.description = dto.description;
+
+    await this.prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
+
     return 'Producto actualizado';
   }
 
   // ELIMINAR
   async deleteProduct(id: number) {
-    await this.findOne(id);
-    await this.productRepository.delete(id);
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    await this.prisma.product.delete({
+      where: { id },
+    });
+
     return 'Producto eliminado';
   }
 }

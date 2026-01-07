@@ -1,80 +1,109 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { User } from './entities/user.entity';
-import * as bcrypt from 'bcrypt'
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-  ) {}
-
- /* async findByEmailWithPassword(email: string) {
-  return this.userRepository.findOne({
-    where: { email },
-    select: ['id', 'email', 'password'],
-  });
-}*/
-
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateUserDto) {
-    const hashedPassword = await bcrypt.hash(dto.password, 10)
-    const user = this.userRepository.create({
-      ...dto,
-      password: hashedPassword,
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    
+    await this.prisma.user.create({
+      data: {
+        ...dto,
+        password: hashedPassword,
+      },
     });
-    await this.userRepository.save(user)
-    return{
-      message: 'Usuario creado correctamente'
-    }
+
+    return {
+      message: 'Usuario creado correctamente',
+    };
   }
 
   findAll() {
-    return this.userRepository.find();
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        last: true,
+        telefono: true,
+        age: true,
+        isActive: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+        // password no se incluye por defecto
+      },
+    });
   }
 
   async findOne(id: number) {
-    const user = await this.userRepository.findOneBy({ id });
-    if (!user) throw new NotFoundException('Usuario no ha sido encontrado');
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        last: true,
+        telefono: true,
+        age: true,
+        isActive: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no ha sido encontrado');
+    }
+
     return user;
   }
 
   async update(id: number, dto: UpdateUserDto) {
-    const user = await this.findOne(id);
-
+    // Verificar que el usuario existe
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    // 👇 Si viene password, lo encriptamos
+    // Si viene password, lo encriptamos
+    const updateData: any = { ...dto };
     if (dto.password) {
-      const salt = await bcrypt.genSalt(10);
-      dto.password = await bcrypt.hash(dto.password, salt);
+      updateData.password = await bcrypt.hash(dto.password, 10);
     }
 
-    // 👇 Solo actualiza los campos enviados
-    Object.assign(user, dto);
-
-    await this.userRepository.save(user);
+    await this.prisma.user.update({
+      where: { id },
+      data: updateData,
+    });
 
     return {
       message: 'Usuario actualizado correctamente',
-    }
+    };
   }
 
   async remove(id: number) {
-    const user = await this.findOne(id);
-    await this.userRepository.delete(user.id);
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    await this.prisma.user.delete({
+      where: { id },
+    });
+
     return 'Usuario eliminado correctamente';
   }
 
   async findByEmail(email: string) {
-    return  this.userRepository.findOne({ 
-      where: {email} 
+    return this.prisma.user.findUnique({
+      where: { email },
     });
   }
 }
