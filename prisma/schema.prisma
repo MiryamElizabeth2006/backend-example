@@ -15,6 +15,7 @@ model User {
   name      String
   last      String
   telefono  String
+  age       Int
   isActive  Boolean  @default(true)
   email     String   @unique
   password  String
